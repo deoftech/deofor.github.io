@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>deofor</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+/* Layout: one terminal window centered on a near-black page; tabs act as shell "pages" */
+:root {
+  --bg: #000000;
+  --win: #0d0d0d;
+  --bar: #1a1a1a;
+  --line: #2a2a2a;
+  --fg: #f2f2f2;
+  --dim: #8d8d8d;
+  --key: #d24e01;
+  --art: #d24e01;
+  --red: #d24e01;
+  --red-dark: #8a3300;
+  --hl: #ff8a3d;
+  --green: #6fae5a;
+  --link: #f0661a;
+  --font: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--bg); }
+body {
+  color: var(--fg);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.6;
+  padding-block: 20px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.window {
+  max-width: 760px;
+  margin: 0 auto;
+  background: var(--win);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.titlebar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  background: var(--bar);
+  padding: 10px 12px 0;
+  gap: 12px;
+}
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  background: var(--win);
+  color: var(--fg);
+  font-size: 13px;
+  padding: 9px 14px;
+  border-radius: 8px 8px 0 0;
+}
+.tab .prompt-icon { color: var(--key); font-weight: 700; flex: none; }
+.tab .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tab .x { color: var(--dim); flex: none; }
+.winctl { display: flex; gap: 16px; color: var(--dim); padding-bottom: 10px; flex: none; }
+.winctl svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+
+.screen { padding: 22px 22px 8px; min-height: 480px; }
+.cmd { margin: 0 0 18px; word-break: break-word; }
+.user { color: var(--key); }
+.path { color: var(--link); }
+.dollar { color: var(--fg); }
+
+.fetch { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.art {
+  margin: 0;
+  color: var(--art);
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.25;
+  white-space: pre;
+  overflow-x: auto;
+  max-width: 100%;
+}
+.info { align-self: stretch; }
+.art .g { color: var(--green); }
+.art .o { color: var(--red-dark); }
+.art .f { color: var(--red); }
+.art .h { color: var(--hl); }
+.handle { color: var(--key); font-weight: 700; font-size: 18px; display: inline-block; border-bottom: 1px solid var(--dim); padding-bottom: 4px; margin: 0 0 12px; }
+dl.rows { margin: 0; display: grid; grid-template-columns: max-content 1fr; column-gap: 12px; row-gap: 2px; }
+dl.rows dt { color: var(--key); font-weight: 500; }
+dl.rows dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.blurb { color: var(--dim); margin: 16px 0 0; max-width: 62ch; }
+
+.block { margin: 0 0 18px; max-width: 66ch; }
+.block p { margin: 0 0 10px; }
+.list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.list li { display: grid; grid-template-columns: minmax(0, max-content) 1fr; gap: 4px 16px; }
+.list .k { color: var(--key); }
+.list .v { color: var(--fg); min-width: 0; overflow-wrap: anywhere; }
+.dim { color: var(--dim); }
+a { color: var(--link); text-decoration: none; border-bottom: 1px solid transparent; }
+a:hover, a:focus-visible { border-bottom-color: var(--link); outline: none; }
+.copy {
+  font: inherit; font-size: 12px; color: var(--dim); background: none;
+  border: 1px solid var(--line); border-radius: 4px; padding: 0 8px; margin-left: 8px; cursor: pointer;
+}
+.copy:hover, .copy:focus-visible { color: var(--fg); border-color: var(--dim); outline: none; }
+
+nav.tabs {
+  display: flex; flex-wrap: wrap; gap: 6px 26px;
+  padding: 18px 22px 14px;
+}
+nav.tabs a { color: var(--dim); padding-bottom: 3px; border-bottom: 2px solid transparent; }
+nav.tabs a:hover, nav.tabs a:focus-visible { color: var(--fg); }
+nav.tabs a[aria-current="page"] { color: var(--key); border-bottom-color: var(--key); }
+
+/* tabs also work without JavaScript, through the URL hash */
+[data-view] { display: none; }
+#home { display: block; }
+[data-view]:target, [data-view].on { display: block; }
+.screen:has(:target) #home:not(:target) { display: none; }
+.window:has(#about:target) nav.tabs a[href="#about"],
+.window:has(#skills:target) nav.tabs a[href="#skills"],
+.window:has(#links:target) nav.tabs a[href="#links"],
+.window:has(#home:target) nav.tabs a[href="#home"],
+.window:not(:has([data-view]:target)) nav.tabs a[href="#home"] { color: var(--key); border-bottom-color: var(--key); }
+
+.last { padding: 0 22px 22px; margin: 0; }
+.cursor {
+  display: inline-block; width: 0.6em; height: 1.1em; background: var(--fg);
+  vertical-align: text-bottom; margin-left: 2px; animation: blink 1.1s steps(1) infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+/* colour + motion play */
+body { background: radial-gradient(ellipse 80% 50% at 50% -5%, #2a0f00 0%, var(--bg) 70%) fixed; }
+.window {
+  position: relative;
+  animation: glow 4s ease-in-out infinite alternate;
+}
+@keyframes glow {
+  from { border-color: var(--line); box-shadow: 0 10px 60px -25px rgba(210,78,1,.25); }
+  to   { border-color: #5c2400;     box-shadow: 0 10px 90px -15px rgba(210,78,1,.45); }
+}
+/* faint CRT scanlines over the whole window */
+.window::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(to bottom, rgba(255,255,255,.025) 0 1px, transparent 1px 3px);
+}
+.handle {
+  background: linear-gradient(90deg, #d24e01, #a63b00, #f0661a, #d24e01);
+  background-size: 300% 100%;
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+  animation: shift 7s linear infinite;
+}
+@keyframes shift { to { background-position: 300% 0; } }
+.user { text-shadow: 0 0 8px rgba(210,78,1,.45); }
+a:hover, a:focus-visible { text-shadow: 0 0 10px var(--link); }
+nav.tabs a { transition: color .2s, text-shadow .2s, border-color .2s; }
+nav.tabs a[aria-current="page"] { text-shadow: 0 0 12px rgba(210,78,1,.7); }
+.cursor { animation: blink 1.1s steps(1) infinite, hue 6s ease-in-out infinite; }
+@keyframes hue { 0%, 100% { background: #d24e01; } 50% { background: #f0661a; } }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+[data-view].on, [data-view]:target { animation: rise .35s ease both; }
+dl.rows > * { animation: rise .45s ease both; }
+dl.rows > :nth-child(-n+2)  { animation-delay: .05s; }
+dl.rows > :nth-child(n+3)  { animation-delay: .12s; }
+dl.rows > :nth-child(n+5)  { animation-delay: .19s; }
+dl.rows > :nth-child(n+7)  { animation-delay: .26s; }
+dl.rows > :nth-child(n+9)  { animation-delay: .33s; }
+dl.rows > :nth-child(n+11) { animation-delay: .40s; }
+dl.rows > :nth-child(n+13) { animation-delay: .47s; }
+.copy { transition: color .2s, border-color .2s, box-shadow .2s; }
+.copy:hover, .copy:focus-visible { box-shadow: 0 0 10px rgba(210,78,1,.35); }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+@media (min-width: 640px) {
+  .fetch { flex-direction: row; align-items: flex-start; gap: 36px; }
+  .art { font-size: 14px; }
+}
+@media (max-width: 420px) {
+  .screen { padding: 18px 16px 6px; }
+  nav.tabs { padding: 14px 16px 12px; gap: 6px 20px; }
+  .last { padding: 0 16px 18px; }
+  .winctl { display: none; }
+}
+</style>
+
+<style>body{margin:0}[hidden]{display:none!important}</style>
+</head>
+<body>
+<div class="window">
+  <div class="titlebar">
+    <div class="tab"><span class="prompt-icon" aria-hidden="true">&gt;_</span><span class="name">deofor@deoftech: ~</span><span class="x" aria-hidden="true">×</span></div>
+    <div class="winctl" aria-hidden="true">
+      <svg viewBox="0 0 14 14"><path d="M2 7h10"/></svg>
+      <svg viewBox="0 0 14 14"><rect x="2" y="2" width="10" height="10" rx="1.5"/></svg>
+      <svg viewBox="0 0 14 14"><path d="M2 2l10 10M12 2L2 12"/></svg>
+    </div>
+  </div>
+
+  <main class="screen">
+    <!-- HOME -->
+    <section id="home" data-view>
+      <p class="cmd"><span class="user">deofor@deoftech</span>:<span class="path">~</span><span class="dollar">$</span> fastfetch</p>
+      <div class="fetch">
+        <pre class="art" id="pepper" aria-hidden="true"></pre>
+        <div class="info">
+          <div class="handle">deofor@deoftech</div>
+          <dl class="rows">
+            <dt>OS:</dt><dd>CachyOS x86_64</dd>
+            <dt>Role:</dt><dd>learning Python &amp; Rust</dd>
+            <dt>Hobby:</dt><dd>phone flashing &amp; repair</dd>
+            <dt>CPU:</dt><dd>Intel Core i5-11400F</dd>
+            <dt>GPU:</dt><dd>NVIDIA GTX 1650</dd>
+            <dt>Terminal:</dt><dd>Linux Terminal</dd>
+            <dt>IP (local):</dt><dd>192.0.0.1</dd>
+          </dl>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABOUT -->
+    <section id="about" data-view>
+      <p class="cmd"><span class="user">deofor@deoftech</span>:<span class="path">~</span><span class="dollar">$</span> cat about.txt</p>
+      <div class="block">
+        <p>Hi, I'm deofor.</p>
+        <p>I'm learning Python and Rust. Outside of code I flash and repair phones.</p>
+        <p>My main machine runs CachyOS on an i5-11400F and a GTX 1650, with Windows 11 as a secondary system.</p>
+        <p class="dim">Need a phone flashed or fixed? Write to me on Telegram.</p>
+      </div>
+    </section>
+
+    <!-- SKILLS -->
+    <section id="skills" data-view>
+      <p class="cmd"><span class="user">deofor@deoftech</span>:<span class="path">~</span><span class="dollar">$</span> cat skills.txt</p>
+      <ul class="list">
+        <li><span class="k">Python</span><span class="v">learning</span></li>
+        <li><span class="k">Rust</span><span class="v">learning</span></li>
+        <li><span class="k">Phone flashing</span><span class="v">firmware and software work on phones</span></li>
+        <li><span class="k">Phone repair</span><span class="v">hardware fixes</span></li>
+        <li><span class="k">Linux</span><span class="v">CachyOS on my own PC</span></li>
+      </ul>
+    </section>
+
+    <!-- LINKS -->
+    <section id="links" data-view>
+      <p class="cmd"><span class="user">deofor@deoftech</span>:<span class="path">~</span><span class="dollar">$</span> cat links.txt</p>
+      <ul class="list">
+        <li>
+          <span class="k">Telegram (work)</span>
+          <span class="v"><a href="https://t.me/deoftech" target="_blank" rel="noopener">t.me/deoftech</a><button class="copy" type="button" id="copy-tg">copy @deoftech</button></span>
+        </li>
+        <li>
+          <span class="k">Telegram (personal)</span>
+          <span class="v"><a href="https://t.me/deof69" target="_blank" rel="noopener">t.me/deof69</a><button class="copy" type="button" id="copy-tg2">copy @deof69</button></span>
+        </li>
+        <li>
+          <span class="k">GitHub</span>
+          <span class="v"><a href="https://github.com/deoftech" target="_blank" rel="noopener">github.com/deoftech</a></span>
+        </li>
+        <li>
+          <span class="k">Discord</span>
+          <span class="v">deogen___<button class="copy" type="button" id="copy-dc">copy deogen___</button></span>
+        </li>
+      </ul>
+    </section>
+  </main>
+
+  <nav class="tabs" aria-label="Pages">
+    <a href="#home">home</a>
+    <a href="#about">about</a>
+    <a href="#skills">skills</a>
+    <a href="#links">links</a>
+  </nav>
+  <p class="last"><span class="user">deofor@deoftech</span>:<span class="path">~</span><span class="dollar">$</span> <span class="cursor" aria-hidden="true"></span></p>
+</div>
+
+<script>
+(function () {
+  var views = Array.prototype.slice.call(document.querySelectorAll("[data-view]"));
+  var links = Array.prototype.slice.call(document.querySelectorAll("nav.tabs a"));
+  var names = views.map(function (v) { return v.id; });
+
+  function show(name) {
+    var h = typeof name === "string" ? name : (location.hash || "").replace("#", "");
+    if (names.indexOf(h) === -1) h = "home";
+    views.forEach(function (v) {
+      v.hidden = v.id !== h;
+      v.classList.toggle("on", v.id === h);
+    });
+    links.forEach(function (a) {
+      if (a.getAttribute("href") === "#" + h) a.setAttribute("aria-current", "page");
+      else a.removeAttribute("aria-current");
+    });
+  }
+  links.forEach(function (a) {
+    a.addEventListener("click", function (e) {
+      e.preventDefault();
+      var h = a.getAttribute("href").replace("#", "");
+      show(h);
+      try { history.replaceState(null, "", "#" + h); } catch (err) {}
+    });
+  });
+  window.addEventListener("hashchange", function () { show(); });
+  show();
+
+  var art = document.getElementById("pepper");
+  if (art) {
+    var W = 44, grid = [], cx = 22, RY = 6, RX = 13;
+    var blank = function () {
+      var a = [];
+      for (var i = 0; i < W; i++) a.push({ c: " ", k: "" });
+      return a;
+    };
+    var cap = blank();
+    "-._.-".split("").forEach(function (ch, i) { cap[cx - 2 + i] = { c: ch, k: "g" }; });
+    grid.push(cap);
+    for (var y = 0; y <= 2 * RY; y++) {
+      var dy = (y - RY) / (RY + 0.6);
+      var w = Math.round(RX * Math.sqrt(1 - dy * dy));
+      var row = blank();
+      var edge = (y === 0 || y === 2 * RY);
+      for (var x = cx - w; x <= cx + w; x++) row[x] = edge ? { c: y === 0 ? "_" : "-", k: "o" } : { c: "#", k: "f" };
+      if (!edge) { row[cx - w - 1] = { c: "(", k: "o" }; row[cx + w + 1] = { c: ")", k: "o" }; }
+      grid.push(row);
+    }
+    var tips = ["_,", "/,", "|,", "/,"];
+    var t = 0;
+    var draw = function () {
+      var s0 = blank(), s1 = blank();
+      tips[t % 4].split("").forEach(function (ch, i) { s0[cx + i] = { c: ch, k: "g" }; });
+      "/|".split("").forEach(function (ch, i) { s1[cx - 1 + i] = { c: ch, k: "g" }; });
+      var rows = [s0, s1].concat(grid);
+      var lead = W;
+      rows.forEach(function (rw) {
+        for (var i = 0; i < W; i++) { if (rw[i].c !== " ") { if (i < lead) lead = i; break; } }
+      });
+      var out = rows.map(function (rw, yy) {
+        var h = "";
+        for (var xx = lead; xx < W; xx++) {
+          var cell = rw[xx];
+          if (cell.c === " ") h += " ";
+          else if (cell.k === "f") h += ((xx + yy + t) % 12 < 2) ? '<span class="h">%</span>' : '<span class="f">#</span>';
+          else h += '<span class="' + cell.k + '">' + cell.c + "</span>";
+        }
+        return h.replace(/\s+$/, "");
+      });
+      art.innerHTML = out.join("\n");
+    };
+    draw();
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setInterval(function () { t = (t + 1) % 48; draw(); }, 140);
+    }
+  }
+
+  function wireCopy(id, text) {
+    var btn = document.getElementById(id);
+    if (!btn) return;
+    var label = btn.textContent;
+    btn.addEventListener("click", function () {
+      var done = function () { btn.textContent = "copied"; setTimeout(function () { btn.textContent = label; }, 1500); };
+      try {
+        navigator.clipboard.writeText(text).then(done, function () {});
+      } catch (e) {}
+    });
+  }
+  wireCopy("copy-tg", "@deoftech");
+  wireCopy("copy-tg2", "@deof69");
+  wireCopy("copy-dc", "deogen___");
+})();
+</script>
+
+</body>
+</html>
